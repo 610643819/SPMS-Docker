@@ -3,8 +3,156 @@
 # SPMS 一键部署脚本
 # 包含网络错误容错处理
 
-git clone https://github.com/610643819/SPMS-Web.git
-git clone https://github.com/610643819/SPMS-Serve.git
+clone_or_update_repo() {
+    local repo_url="$1"
+    local target_dir="$2"
+
+    if [ -d "$target_dir/.git" ]; then
+        echo "仓库 $target_dir 已存在，尝试更新..."
+        if (cd "$target_dir" && git pull --rebase --autostash); then
+            echo "仓库 $target_dir 更新成功"
+        else
+            echo "警告: 更新 $target_dir 失败，尝试强制同步远程分支..."
+            if (cd "$target_dir" && git fetch --all && git reset --hard origin/HEAD); then
+                echo "仓库 $target_dir 强制同步成功"
+            else
+                echo "错误: 无法更新仓库 $target_dir"
+                return 1
+            fi
+        fi
+    else
+        echo "正在克隆仓库 $repo_url 到 $target_dir ..."
+        git clone "$repo_url" "$target_dir" || return 1
+    fi
+}
+
+download_node_archive() {
+    local url="$1"
+    local output="$2"
+
+    if command -v curl &> /dev/null; then
+        curl -fsSL "$url" -o "$output"
+    else
+        wget -qO "$output" "$url"
+    fi
+}
+
+get_latest_node_archive() {
+    local platform="$1"
+    local arch="$2"
+    local index_url="https://nodejs.org/dist/latest/SHASUMS256.txt"
+    local list
+
+    if command -v curl &> /dev/null; then
+        list="$(curl -fsSL "$index_url")"
+    else
+        list="$(wget -qO- "$index_url")"
+    fi
+
+    printf '%s\n' "$list" | grep "node-v.*-${platform}-${arch}\.tar\.xz" | head -1 | awk '{print $2}'
+}
+
+ensure_node() {
+    local node_version="24.14.0"
+    local install_dir="$HOME/.local/node-v${node_version}"
+    local arch
+    local platform
+
+    if command -v node &> /dev/null; then
+        return 0
+    fi
+
+    arch=$(uname -m)
+    case "$(uname -s)" in
+        Linux) platform="linux" ;;
+        Darwin) platform="darwin" ;;
+        *) platform="$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
+    esac
+
+    if [ -d "$install_dir" ] && [ -x "$install_dir/bin/node" ]; then
+        export PATH="$install_dir/bin:$PATH"
+        return 0
+    fi
+
+    echo "未检测到 Node.js，准备安装 Node.js v${node_version}..."
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+        echo "错误: 未检测到 curl 或 wget，无法下载 Node.js"
+        return 1
+    fi
+
+    local archive_name="node-v${node_version}-${platform}-${arch}.tar.xz"
+    local download_url="https://nodejs.org/dist/v${node_version}/${archive_name}"
+    local tmpfile
+    local downloaded_version="$node_version"
+
+    mkdir -p "$install_dir"
+    tmpfile="$(mktemp)"
+
+    if ! download_node_archive "$download_url" "$tmpfile"; then
+        echo "警告: 下载 Node.js v${node_version} 失败，尝试下载最新 Node.js..."
+        local latest_archive
+        latest_archive="$(get_latest_node_archive "$platform" "$arch")"
+        if [ -z "$latest_archive" ]; then
+            echo "错误: 无法获取最新 Node.js 下载链接"
+            rm -f "$tmpfile"
+            return 1
+        fi
+
+        archive_name="$latest_archive"
+        download_url="https://nodejs.org/dist/latest/${archive_name}"
+        install_dir="$HOME/.local/${archive_name%.tar.xz}"
+        mkdir -p "$install_dir"
+
+        if ! download_node_archive "$download_url" "$tmpfile"; then
+            echo "错误: 下载最新 Node.js 失败"
+            rm -f "$tmpfile"
+            return 1
+        fi
+        downloaded_version="latest"
+    fi
+
+    tar -xJf "$tmpfile" -C "$(dirname "$install_dir")" || { echo "错误: 解压 Node.js 失败"; rm -f "$tmpfile"; return 1; }
+    rm -f "$tmpfile"
+
+    mv "$(dirname "$install_dir")/${archive_name%.tar.xz}" "$install_dir" 2>/dev/null || true
+    export PATH="$install_dir/bin:$PATH"
+
+    if command -v node &> /dev/null; then
+        echo "Node.js ${downloaded_version} 已安装到 $install_dir"
+        return 0
+    fi
+
+    echo "错误: Node.js 安装完成后仍无法找到 node"
+    return 1
+}
+
+install_web_dependencies() {
+    local target_dir="$1"
+
+    if [ ! -f "$target_dir/package.json" ]; then
+        echo "跳过依赖安装：$target_dir/package.json 不存在"
+        return 0
+    fi
+
+    ensure_node || return 1
+
+    if ! command -v npm &> /dev/null; then
+        echo "错误: 未检测到 npm，请先安装 Node.js/npm"
+        return 1
+    fi
+
+    echo "正在为 $target_dir 安装前端依赖..."
+    if (cd "$target_dir" && npm install); then
+        echo "依赖安装完成：$target_dir"
+    else
+        echo "错误: $target_dir 依赖安装失败"
+        return 1
+    fi
+}
+
+clone_or_update_repo "https://github.com/610643819/SPMS-Web.git" "SPMS-Web" || exit 1
+install_web_dependencies "SPMS-Web" || exit 1
+clone_or_update_repo "https://github.com/610643819/SPMS-Serve.git" "SPMS-Serve" || exit 1
 
 echo "开始部署SPMS系统..."
 
