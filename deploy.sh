@@ -49,6 +49,21 @@ node_download_arch() {
     esac
 }
 
+try_use_nvm_node() {
+    local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+    local node_bin
+
+    if [ -d "$nvm_dir/versions/node" ]; then
+        node_bin="$(find "$nvm_dir/versions/node" -maxdepth 2 -type f -path '*/bin/node' | sort | head -n 1)"
+        if [ -n "$node_bin" ] && [ -x "$node_bin" ]; then
+            export PATH="$(dirname "$node_bin"):$PATH"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 get_latest_node_archive() {
     local platform="$1"
     local arch="$2"
@@ -72,6 +87,10 @@ ensure_node() {
     local platform
 
     if command -v node &> /dev/null; then
+        return 0
+    fi
+
+    if try_use_nvm_node; then
         return 0
     fi
 
