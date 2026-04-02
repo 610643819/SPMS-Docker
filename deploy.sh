@@ -226,9 +226,30 @@ install_web_dependencies() {
     fi
 }
 
+build_web_production() {
+    local target_dir="$1"
+
+    echo "准备为 $target_dir 运行 yarn production"
+    if [ ! -f "$target_dir/package.json" ]; then
+        echo "跳过生产构建：$target_dir/package.json 不存在"
+        return 0
+    fi
+
+    ensure_node || return 1
+    ensure_yarn || return 1
+
+    echo "正在为 $target_dir 执行 yarn production..."
+    if (cd "$target_dir" && yarn production); then
+        echo "生产构建完成：$target_dir"
+    else
+        echo "错误: $target_dir 生产构建失败"
+        return 1
+    fi
+}
+
 clone_or_update_repo "https://github.com/610643819/SPMS-Web.git" "SPMS-Web" || exit 1
-# install_web_dependencies "SPMS-Web" || exit 1
-# echo "跳过 SPMS-Web 前端依赖安装，继续后续部署。"
+install_web_dependencies "SPMS-Web" || exit 1
+build_web_production "SPMS-Web" || exit 1
 
 # SPMS-Server 仅在 docker-compose 中被引用，旧目录名可能为 SPMS-Serve。
 if [ ! -d "SPMS-Server/.git" ] && [ -d "SPMS-Serve/.git" ]; then
