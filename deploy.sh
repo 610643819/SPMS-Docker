@@ -59,7 +59,7 @@ try_use_nvm_node() {
 
     echo "尝试从 NVM 安装目录查找 node: $nvm_dir"
     if [ -d "$nvm_dir/versions/node" ]; then
-        node_bin="$(find "$nvm_dir/versions/node" -maxdepth 2 -type f -path '*/bin/node' | sort | head -n 1)"
+        node_bin="$(find "$nvm_dir/versions/node" -type f -path '*/bin/node' 2>/dev/null | sort | head -n 1)"
         if [ -n "$node_bin" ] && [ -x "$node_bin" ]; then
             echo "找到 NVM 中的 node: $node_bin"
             export PATH="$(dirname "$node_bin"):$PATH"
