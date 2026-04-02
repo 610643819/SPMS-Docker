@@ -199,7 +199,8 @@ install_web_dependencies() {
 }
 
 clone_or_update_repo "https://github.com/610643819/SPMS-Web.git" "SPMS-Web" || exit 1
-install_web_dependencies "SPMS-Web" || exit 1
+# install_web_dependencies "SPMS-Web" || exit 1
+echo "跳过 SPMS-Web 前端依赖安装，继续后续部署。"
 
 # SPMS-Server 仅在 docker-compose 中被引用，旧目录名可能为 SPMS-Serve。
 if [ ! -d "SPMS-Server/.git" ] && [ -d "SPMS-Serve/.git" ]; then
