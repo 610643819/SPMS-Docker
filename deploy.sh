@@ -3,8 +3,8 @@
 # SPMS 一键部署脚本
 # 包含网络错误容错处理
 
-git clone https://github.com/s-pms/SPMS-Web.git
-git clone https://github.com/s-pms/SPMS-Server.git
+git clone https://github.com/610643819/SPMS-Web.git
+git clone https://github.com/610643819/SPMS-Serve.git
 
 echo "开始部署SPMS系统..."
 
