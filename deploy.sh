@@ -23,6 +23,7 @@ clone_or_update_repo() {
     else
         echo "正在克隆仓库 $repo_url 到 $target_dir ..."
         git clone "$repo_url" "$target_dir" || return 1
+        echo "仓库 $target_dir 克隆完成"
     fi
 }
 
@@ -30,9 +31,12 @@ download_node_archive() {
     local url="$1"
     local output="$2"
 
+    echo "正在下载 Node.js 归档: $url"
     if command -v curl &> /dev/null; then
+        echo "使用 curl 下载"
         curl -fsSL "$url" -o "$output"
     else
+        echo "使用 wget 下载"
         wget -qO "$output" "$url"
     fi
 }
@@ -53,14 +57,17 @@ try_use_nvm_node() {
     local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
     local node_bin
 
+    echo "尝试从 NVM 安装目录查找 node: $nvm_dir"
     if [ -d "$nvm_dir/versions/node" ]; then
         node_bin="$(find "$nvm_dir/versions/node" -maxdepth 2 -type f -path '*/bin/node' | sort | head -n 1)"
         if [ -n "$node_bin" ] && [ -x "$node_bin" ]; then
+            echo "找到 NVM 中的 node: $node_bin"
             export PATH="$(dirname "$node_bin"):$PATH"
             return 0
         fi
     fi
 
+    echo "未在 NVM 目录中找到可用的 node"
     return 1
 }
 
@@ -86,11 +93,14 @@ ensure_node() {
     local node_arch
     local platform
 
-    if command -v node &> /dev/null; then
+    if node -v > /dev/null 2>&1; then
+        echo "检测到系统已安装 Node.js: $(node -v 2>/dev/null)"
         return 0
     fi
 
+    echo "未在当前 PATH 中检测到 node，尝试使用 NVM 安装路径"
     if try_use_nvm_node; then
+        echo "已使用 NVM 的 node: $(node -v 2>/dev/null)"
         return 0
     fi
 
@@ -103,11 +113,13 @@ ensure_node() {
     esac
 
     if [ -d "$install_dir" ] && [ -x "$install_dir/bin/node" ]; then
+        echo "检测到本地安装目录 Node.js: $install_dir"
         export PATH="$install_dir/bin:$PATH"
         return 0
     fi
 
     echo "未检测到 Node.js，准备安装 Node.js v${node_version}..."
+    echo "检测到平台: $platform，架构: $node_arch"
     if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
         echo "错误: 未检测到 curl 或 wget，无法下载 Node.js"
         return 1
@@ -130,6 +142,7 @@ ensure_node() {
             return 1
         fi
 
+        echo "已找到最新 Node.js 归档: $latest_archive"
         archive_name="$latest_archive"
         download_url="https://nodejs.org/dist/latest/${archive_name}"
         install_dir="$HOME/.local/${archive_name%.tar.xz}"
@@ -142,13 +155,15 @@ ensure_node() {
         downloaded_version="latest"
     fi
 
+    echo "正在解压 Node.js 归档到 $HOME/.local"
     tar -xJf "$tmpfile" -C "$HOME/.local" || { echo "错误: 解压 Node.js 失败"; rm -f "$tmpfile"; return 1; }
     rm -f "$tmpfile"
 
+    echo "移动解压后的 Node.js 目录到 $install_dir"
     mv "$HOME/.local/${archive_name%.tar.xz}" "$install_dir" 2>/dev/null || true
     export PATH="$install_dir/bin:$PATH"
 
-    if command -v node &> /dev/null; then
+    if node -v > /dev/null 2>&1; then
         echo "Node.js ${downloaded_version} 已安装到 $install_dir"
         return 0
     fi
@@ -160,6 +175,7 @@ ensure_node() {
 install_web_dependencies() {
     local target_dir="$1"
 
+    echo "准备安装 $target_dir 的前端依赖"
     if [ ! -f "$target_dir/package.json" ]; then
         echo "跳过依赖安装：$target_dir/package.json 不存在"
         return 0
@@ -172,7 +188,8 @@ install_web_dependencies() {
         return 1
     fi
 
-    echo "正在为 $target_dir 安装前端依赖..."
+    echo "当前 npm 路径: $(command -v npm 2>/dev/null)"
+    echo "正在为 $target_dir 运行 npm install..."
     if (cd "$target_dir" && npm install); then
         echo "依赖安装完成：$target_dir"
     else
