@@ -37,6 +37,18 @@ download_node_archive() {
     fi
 }
 
+node_download_arch() {
+    local arch="$1"
+    case "$arch" in
+        x86_64|amd64) printf 'x64' ;;
+        aarch64|arm64) printf 'arm64' ;;
+        armv7l) printf 'armv7l' ;;
+        ppc64le) printf 'ppc64le' ;;
+        s390x) printf 's390x' ;;
+        *) printf '%s' "$arch" ;;
+    esac
+}
+
 get_latest_node_archive() {
     local platform="$1"
     local arch="$2"
@@ -56,6 +68,7 @@ ensure_node() {
     local node_version="24.14.0"
     local install_dir="$HOME/.local/node-v${node_version}"
     local arch
+    local node_arch
     local platform
 
     if command -v node &> /dev/null; then
@@ -63,6 +76,7 @@ ensure_node() {
     fi
 
     arch=$(uname -m)
+    node_arch="$(node_download_arch "$arch")"
     case "$(uname -s)" in
         Linux) platform="linux" ;;
         Darwin) platform="darwin" ;;
@@ -80,18 +94,17 @@ ensure_node() {
         return 1
     fi
 
-    local archive_name="node-v${node_version}-${platform}-${arch}.tar.xz"
+    local archive_name="node-v${node_version}-${platform}-${node_arch}.tar.xz"
     local download_url="https://nodejs.org/dist/v${node_version}/${archive_name}"
     local tmpfile
     local downloaded_version="$node_version"
 
-    mkdir -p "$install_dir"
     tmpfile="$(mktemp)"
 
     if ! download_node_archive "$download_url" "$tmpfile"; then
         echo "警告: 下载 Node.js v${node_version} 失败，尝试下载最新 Node.js..."
         local latest_archive
-        latest_archive="$(get_latest_node_archive "$platform" "$arch")"
+        latest_archive="$(get_latest_node_archive "$platform" "$node_arch")"
         if [ -z "$latest_archive" ]; then
             echo "错误: 无法获取最新 Node.js 下载链接"
             rm -f "$tmpfile"
@@ -101,7 +114,6 @@ ensure_node() {
         archive_name="$latest_archive"
         download_url="https://nodejs.org/dist/latest/${archive_name}"
         install_dir="$HOME/.local/${archive_name%.tar.xz}"
-        mkdir -p "$install_dir"
 
         if ! download_node_archive "$download_url" "$tmpfile"; then
             echo "错误: 下载最新 Node.js 失败"
@@ -111,10 +123,10 @@ ensure_node() {
         downloaded_version="latest"
     fi
 
-    tar -xJf "$tmpfile" -C "$(dirname "$install_dir")" || { echo "错误: 解压 Node.js 失败"; rm -f "$tmpfile"; return 1; }
+    tar -xJf "$tmpfile" -C "$HOME/.local" || { echo "错误: 解压 Node.js 失败"; rm -f "$tmpfile"; return 1; }
     rm -f "$tmpfile"
 
-    mv "$(dirname "$install_dir")/${archive_name%.tar.xz}" "$install_dir" 2>/dev/null || true
+    mv "$HOME/.local/${archive_name%.tar.xz}" "$install_dir" 2>/dev/null || true
     export PATH="$install_dir/bin:$PATH"
 
     if command -v node &> /dev/null; then
