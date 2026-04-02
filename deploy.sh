@@ -172,6 +172,32 @@ ensure_node() {
     return 1
 }
 
+ensure_yarn() {
+    if command -v yarn &> /dev/null; then
+        echo "检测到 yarn: $(yarn --version 2>/dev/null)"
+        return 0
+    fi
+
+    if command -v corepack &> /dev/null; then
+        echo "未检测到 yarn，使用 corepack 启用 yarn"
+        if corepack enable && corepack prepare yarn@stable --activate; then
+            echo "yarn 已启用"
+            return 0
+        fi
+    fi
+
+    if command -v npm &> /dev/null; then
+        echo "未检测到 yarn，使用 npm 全局安装 yarn"
+        if npm install -g yarn; then
+            echo "yarn 已安装: $(yarn --version 2>/dev/null)"
+            return 0
+        fi
+    fi
+
+    echo "错误: 未检测到 yarn 且无法自动安装 yarn"
+    return 1
+}
+
 install_web_dependencies() {
     local target_dir="$1"
 
@@ -188,9 +214,11 @@ install_web_dependencies() {
         return 1
     fi
 
-    echo "当前 npm 路径: $(command -v npm 2>/dev/null)"
-    echo "正在为 $target_dir 运行 npm install..."
-    if (cd "$target_dir" && npm install); then
+    ensure_yarn || return 1
+
+    echo "当前 yarn 路径: $(command -v yarn 2>/dev/null)"
+    echo "正在为 $target_dir 运行 yarn install..."
+    if (cd "$target_dir" && yarn); then
         echo "依赖安装完成：$target_dir"
     else
         echo "错误: $target_dir 依赖安装失败"
@@ -200,7 +228,7 @@ install_web_dependencies() {
 
 clone_or_update_repo "https://github.com/610643819/SPMS-Web.git" "SPMS-Web" || exit 1
 # install_web_dependencies "SPMS-Web" || exit 1
-echo "跳过 SPMS-Web 前端依赖安装，继续后续部署。"
+# echo "跳过 SPMS-Web 前端依赖安装，继续后续部署。"
 
 # SPMS-Server 仅在 docker-compose 中被引用，旧目录名可能为 SPMS-Serve。
 if [ ! -d "SPMS-Server/.git" ] && [ -d "SPMS-Serve/.git" ]; then
